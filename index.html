@@ -1,0 +1,158 @@
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!doctype html>
+
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox World</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --panel2:#1f2630; --line:#2d3643; --txt:#e6edf3; --mut:#8b98a8; --acc:#ff9f1c; --acc2:#ffb84d; --ok:#3fb950; --bad:#f85149; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:#000; color:var(--txt); font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; user-select:none; }
+  canvas#view { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hidden { display:none !important; }
+  .screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,rgba(8,12,20,.55),rgba(8,12,20,.82)); z-index:10; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  h1 { margin:0 0 4px; font-size:30px; letter-spacing:.04em; } h1 span { color:var(--acc); }
+  .sub { color:var(--mut); margin-bottom:18px; }
+  input,select { width:100%; padding:11px 12px; margin:0 0 10px; background:var(--panel2); border:1px solid var(--line); border-radius:9px; color:var(--txt); font:inherit; user-select:text; }
+  input:focus { outline:2px solid var(--acc); border-color:transparent; }
+  button { font:inherit; cursor:pointer; border:0; border-radius:9px; padding:10px 16px; background:var(--panel2); color:var(--txt); border:1px solid var(--line); transition:.12s; }
+  button:hover { background:#2a3340; } button:disabled { opacity:.45; cursor:not-allowed; }
+  button.pri { background:var(--acc); color:#1a1200; border-color:var(--acc); font-weight:700; } button.pri:hover { background:var(--acc2); }
+  button.dng { background:#3b1618; border-color:#6b2327; color:#ffb4b0; } button.dng:hover { background:#4d1c1f; }
+  button.sm { padding:4px 9px; font-size:13px; }
+  .tabs { display:flex; gap:6px; margin-bottom:16px; }
+  .tabs button { flex:1; } .tabs button.on { background:var(--acc); color:#1a1200; border-color:var(--acc); font-weight:700; }
+  .err { color:var(--bad); min-height:20px; margin:4px 0 8px; font-size:14px; }
+  .link { background:none; border:0; color:var(--mut); text-decoration:underline; width:100%; margin-top:8px; }
+  #auth .card { width:min(400px,92vw); }
+  /* меню */
+  #menu { flex-direction:column; align-items:stretch; justify-content:flex-start; padding:20px min(5vw,60px); }
+  .top { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+  .top .logo { font-size:24px; font-weight:800; letter-spacing:.05em; } .top .logo span { color:var(--acc); }
+  .mtabs { display:flex; gap:6px; flex:1; flex-wrap:wrap; }
+  .mtabs button { padding:10px 22px; font-weight:600; } .mtabs button.on { background:var(--acc); color:#1a1200; border-color:var(--acc); }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 14px; display:flex; gap:10px; align-items:center; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px; background:#2a3340; text-transform:uppercase; letter-spacing:.06em; }
+  .badge.owner { background:#5b3a00; color:var(--acc2); } .badge.admin { background:#123a5e; color:#7cc4ff; }
+  .cap { color:var(--acc2); font-weight:700; }
+  .pane { flex:1; overflow:auto; padding-bottom:20px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; }
+  .item { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:6px; }
+  .item .ic { font-size:40px; } .item .nm { font-weight:700; } .item .ds { color:var(--mut); font-size:13px; flex:1; }
+  .item .pr { color:var(--acc2); font-weight:700; }
+  .mode { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px; cursor:pointer; transition:.15s; display:flex; flex-direction:column; gap:8px; }
+  .mode:hover { border-color:var(--acc); transform:translateY(-3px); } .mode h2 { margin:0; font-size:26px; } .mode p { margin:0; color:var(--mut); }
+  .mode .ic { font-size:54px; }
+  .row { display:flex; align-items:center; gap:14px; margin:0 0 14px; } .row label { width:230px; color:var(--mut); } .row input[type=range] { flex:1; margin:0; padding:0; }
+  .set { max-width:640px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; }
+  .row input[type=checkbox] { width:20px; height:20px; margin:0; }
+  /* HUD */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #hud .bars { position:absolute; left:20px; bottom:20px; width:280px; }
+  .bar { height:18px; background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.2); border-radius:9px; overflow:hidden; } .bar i { display:block; height:100%; width:100%; background:linear-gradient(90deg,#d6362e,#ff6b5e); transition:width .15s; }
+  #hud .info { margin-top:8px; text-shadow:0 1px 3px #000; font-weight:600; }
+  #cross { position:absolute; left:50%; top:50%; width:16px; height:16px; margin:-8px; } #cross:before,#cross:after { content:""; position:absolute; background:#fff; opacity:.85; } #cross:before { left:7px; top:0; width:2px; height:16px; } #cross:after { top:7px; left:0; height:2px; width:16px; }
+  #cross.hit:before,#cross.hit:after { background:#ff4d4d; }
+  #kills { position:absolute; right:20px; top:20px; text-align:right; text-shadow:0 1px 3px #000; font-size:14px; }
+  #kills div { background:rgba(0,0,0,.45); padding:3px 10px; border-radius:6px; margin-bottom:4px; }
+  #chat { position:absolute; left:20px; bottom:110px; width:min(420px,60vw); font-size:14px; text-shadow:0 1px 3px #000; }
+  #chat .ln { background:rgba(0,0,0,.4); padding:2px 8px; margin-top:2px; border-radius:5px; word-break:break-word; }
+  #chatIn { position:absolute; left:20px; bottom:80px; width:min(420px,60vw); pointer-events:auto; margin:0; }
+  #mini { position:absolute; right:20px; bottom:20px; width:150px; height:150px; border-radius:50%; border:2px solid rgba(255,255,255,.35); background:rgba(0,0,0,.4); }
+  #hint { position:absolute; left:50%; top:16px; transform:translateX(-50%); background:rgba(0,0,0,.5); padding:5px 14px; border-radius:8px; font-size:13px; color:#cfd8e3; text-align:center; }
+  #hint:empty { display:none; }
+  #banner { position:absolute; left:50%; top:22%; transform:translateX(-50%); font-size:34px; font-weight:800; text-shadow:0 2px 10px #000; text-align:center; }
+  #dead { position:fixed; inset:0; background:rgba(120,0,0,.45); z-index:6; display:flex; align-items:center; justify-content:center; font-size:44px; font-weight:800; pointer-events:none; }
+  #pause .card { width:min(340px,90vw); display:flex; flex-direction:column; gap:10px; text-align:center; }
+  #end .card { text-align:center; display:flex; flex-direction:column; gap:12px; min-width:300px; }
+  #toast { position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:var(--panel); border:1px solid var(--acc); padding:10px 20px; border-radius:10px; z-index:60; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  /* админ-панель */
+  #adminOv { position:fixed; inset:0; z-index:30; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; }
+  #adminOv .box { width:min(1000px,96vw); max-height:90vh; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  #adminPanel .tb { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; } #adminPanel .tb input { width:200px; margin:0; }
+  table { width:100%; border-collapse:collapse; font-size:14px; } th,td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:middle; } th { color:var(--mut); font-weight:600; }
+  td .acts { display:flex; gap:4px; flex-wrap:wrap; } .on-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#444; margin-right:6px; } .on-dot.on { background:var(--ok); }
+  .muted { color:var(--mut); }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- ВХОД -->
+<div id="auth" class="screen hidden">
+  <div class="card">
+    <h1>SANDBOX <span>WORLD</span></h1>
+    <div class="sub">3D открытый мир · драки · онлайн</div>
+    <div class="tabs"><button id="tabLogin" class="on">Вход</button><button id="tabReg">Регистрация</button></div>
+    <input id="aEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="aName" class="reg hidden" placeholder="Ник (2–16 символов)" maxlength="16">
+    <input id="aPass" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="current-password">
+    <input id="aCode" class="reg hidden" placeholder="Код владельца (только для владельца)">
+    <div id="aErr" class="err"></div>
+    <button id="aGo" class="pri" style="width:100%">Войти</button>
+    <button id="aGuest" class="link">Играть без аккаунта (только оффлайн с ботами)</button>
+  </div>
+</div>
+
+<!-- МЕНЮ -->
+<div id="menu" class="screen hidden">
+  <div class="top">
+    <div class="logo">SANDBOX <span>WORLD</span></div>
+    <div class="mtabs">
+      <button data-tab="play" class="on">▶ Играть</button>
+      <button data-tab="shop">🛒 Магазин</button>
+      <button data-tab="settings">⚙ Настройки</button>
+      <button data-tab="admin" id="tabAdmin" class="hidden">🛡 Админ-панель</button>
+    </div>
+    <div class="chip"><span id="mName">—</span><span id="mRole" class="badge"></span><span class="cap">🪙 <span id="mCap">0</span></span></div>
+  </div>
+  <div class="pane" id="pane-play">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:900px">
+      <div class="mode" id="playOnline"><div class="ic">🌍</div><h2>Онлайн</h2><p>Открытый мир с живыми игроками. Побеждай в драках — получай капины.</p><p id="onlineInfo" class="muted"></p></div>
+      <div class="mode" id="playOffline"><div class="ic">🤖</div><h2>Оффлайн</h2><p>Без интернета, только боты. Победи три волны врагов и босса.</p></div>
+      <div class="mode hidden" id="playSpec"><div class="ic">👁</div><h2>Наблюдать</h2><p>Невидимый режим для администраторов: свободная камера и слежка за игроками.</p></div>
+    </div>
+    <p class="muted" style="margin-top:20px">Управление: WASD — ходьба · Shift — бег · Пробел — прыжок · ЛКМ — удар/выстрел · F — машина · Enter — чат · M — карта · P — админ-панель · Esc — пауза</p>
+    <p class="muted" id="statsLine"></p>
+  </div>
+  <div class="pane hidden" id="pane-shop"><div class="grid" id="shopGrid"></div></div>
+  <div class="pane hidden" id="pane-settings">
+    <div class="set">
+      <div class="row"><label>Чувствительность мыши</label><input type="range" id="sSens" min="0.3" max="3" step="0.1"></div>
+      <div class="row"><label>Поле зрения (FOV)</label><input type="range" id="sFov" min="55" max="100" step="1"></div>
+      <div class="row"><label>Дальность прорисовки</label><input type="range" id="sDist" min="120" max="500" step="10"></div>
+      <div class="row"><label>Громкость</label><input type="range" id="sVol" min="0" max="1" step="0.05"></div>
+      <div class="row"><label>Тени</label><input type="checkbox" id="sShadow"></div>
+      <div class="row"><label>Ники над игроками</label><input type="checkbox" id="sNames"></div>
+      <div class="row"><label>Адрес сервера (необязательно)</label><input id="sServer" placeholder="ws://host:3000/ws" style="margin:0"></div>
+      <div style="display:flex;gap:10px;margin-top:6px"><button id="sLogout" class="dng">Выйти из аккаунта</button></div>
+    </div>
+  </div>
+  <div class="pane hidden" id="pane-admin"><div id="adminHome"></div></div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="cross"></div>
+  <div id="hint"></div>
+  <div id="banner"></div>
+  <div id="kills"></div>
+  <div id="chat"></div>
+  <input id="chatIn" class="hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)">
+  <canvas id="mini" width="150" height="150"></canvas>
+  <div class="bars"><div class="bar"><i id="hpBar"></i></div><div class="info"><span id="hpTxt">100</span> HP · <span id="wTxt"></span> · 🪙 <span id="hCap">0</span></div></div>
+</div>
+<div id="dead" class="hidden">Вы погибли…</div>
+
+<div id="pause" class="screen hidden"><div class="card"><h2 style="margin:0">Пауза</h2><button id="pResume" class="pri">Продолжить</button><button id="pAdmin" class="hidden">🛡 Админ-панель (P)</button><button id="pMenu" class="dng">Выйти в меню</button></div></div>
+<div id="end" class="screen hidden"><div class="card"><h1 id="endT">Победа!</h1><div id="endS" class="sub"></div><button id="endBtn" class="pri">В меню</button></div></div>
+<div id="adminOv" class="hidden"><div class="box"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h2 style="margin:0">🛡 Админ-панель</h2><button id="adminClose">✕ Закрыть</button></div><div id="adminSlot"></div></div></div>
+<div id="toast" class="hidden"></div>
+
+<script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script>
+<script type="module" src="/game.js"></script>
+</body>
+</html>
